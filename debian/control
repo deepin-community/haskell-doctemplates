@@ -1,0 +1,93 @@
+Source: haskell-doctemplates
+Maintainer: Debian Haskell Group <pkg-haskell-maintainers@lists.alioth.debian.org>
+Uploaders: Clint Adams <clint@debian.org>
+Priority: optional
+Section: haskell
+Rules-Requires-Root: no
+Build-Depends: debhelper (>= 10),
+ haskell-devscripts-minimal | haskell-devscripts (>= 0.8),
+ cdbs,
+ ghc (>= 8.4.3),
+ ghc-prof,
+ libghc-hsyaml-dev,
+ libghc-hsyaml-prof,
+ libghc-aeson-dev,
+ libghc-aeson-prof,
+ libghc-doclayout-dev (>= 0.3),
+ libghc-doclayout-dev (<< 0.4),
+ libghc-doclayout-prof,
+ libghc-safe-dev,
+ libghc-safe-prof,
+ libghc-scientific-dev,
+ libghc-scientific-prof,
+ libghc-text-conversions-dev,
+ libghc-text-conversions-prof,
+ libghc-unordered-containers-dev,
+ libghc-unordered-containers-prof,
+ libghc-vector-dev,
+ libghc-vector-prof,
+ libghc-glob-dev,
+ libghc-glob-prof,
+ libghc-tasty-dev,
+ libghc-tasty-prof,
+ libghc-tasty-golden-dev,
+ libghc-tasty-golden-prof,
+ libghc-tasty-hunit-dev,
+ libghc-tasty-hunit-prof,
+ libghc-temporary-dev,
+ libghc-temporary-prof,
+Build-Depends-Indep: ghc-doc,
+ libghc-hsyaml-doc,
+ libghc-aeson-doc,
+ libghc-doclayout-doc,
+ libghc-safe-doc,
+ libghc-scientific-doc,
+ libghc-text-conversions-doc,
+ libghc-unordered-containers-doc,
+ libghc-vector-doc,
+Standards-Version: 4.5.0
+Homepage: https://github.com/jgm/doctemplates#readme
+X-Description: Pandoc-style document templates
+ This is the templating system used by pandoc. It was formerly be a
+ module in pandoc. It has been split off to make it easier to use
+ independently.
+
+Package: libghc-doctemplates-dev
+Architecture: any
+Depends: ${haskell:Depends},
+ ${misc:Depends},
+ ${shlibs:Depends},
+Recommends: ${haskell:Recommends},
+Suggests: ${haskell:Suggests},
+Conflicts: ${haskell:Conflicts},
+Provides: ${haskell:Provides},
+Description: ${haskell:ShortDescription}${haskell:ShortBlurb}
+ ${haskell:LongDescription}
+ .
+ ${haskell:Blurb}
+
+Package: libghc-doctemplates-prof
+Architecture: any
+Depends: ${haskell:Depends},
+ ${misc:Depends},
+Recommends: ${haskell:Recommends},
+Suggests: ${haskell:Suggests},
+Conflicts: ${haskell:Conflicts},
+Provides: ${haskell:Provides},
+Description: ${haskell:ShortDescription}${haskell:ShortBlurb}
+ ${haskell:LongDescription}
+ .
+ ${haskell:Blurb}
+
+Package: libghc-doctemplates-doc
+Architecture: all
+Section: doc
+Depends: ${haskell:Depends},
+ ${misc:Depends},
+Recommends: ${haskell:Recommends},
+Suggests: ${haskell:Suggests},
+Conflicts: ${haskell:Conflicts},
+Description: ${haskell:ShortDescription}${haskell:ShortBlurb}
+ ${haskell:LongDescription}
+ .
+ ${haskell:Blurb}
