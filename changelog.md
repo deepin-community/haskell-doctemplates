@@ -1,5 +1,56 @@
 # doctemplates
 
+## 0.10.0.1
+
+  * Don't rely on aeson Object being implemented as a HashMap.
+    This change is needed for doctemplates to compile against aeson 2.0.0.0.
+
+## 0.10
+
+  * Change rendering and conditional behavior with booleans.
+    Previously, `$if(foo)$` evaluated to false iff `foo`
+    would render as the empty string. This forced us to render
+    a boolean False value as an empty string, rather than `false`.
+    And this has caused various problems with templates
+    (#16, jgm/pandoc#7402).  Now, boolean False values render as
+    `false` -- just as True values render as `true`.  And conditionals
+    are now sensitive to booleans, so `$if(foo)$` evaluates to false
+    when `foo` is a boolean False value, even though it would render
+    as the nonempty string `false`.
+
+## 0.9
+
+  * Add BoolVal constructor to Val.  This gives a smoother
+    interface with JSON and YAML.  [API change]
+
+  * Remove overlapping instances by generalizing
+    `ToContext String String` and `FromContext String String`
+    to `TemplateTarget [a] => ToContext [a] [a]` and
+    `TemplateTarget [a] => FromContext [a] [a]`.
+    Remove the instance `ToContext String (Doc String)`.
+    Remove redundant constraints.  (#9, favonia) [API change]
+
+## 0.8.3
+
+  * Properly handle nested loops (#15).  Previously "it" was
+    always used for the variable in a loop, and in a nested loop
+    there was no way to distinguish the value of the inner
+    iteration from the value of the outer one.  Now we assign
+    the iterated value to both "it" and to the original variable
+    name (e.g. "foo.bar").  This probably has a small negative
+    performance impact.  Note that this change also affects
+    the output of the template parser:  original variable
+    names are now retained instead of being replaced by "it".
+
+  * Remove duplicate IsString constraint (#14, Mario Lang).
+
+  * Update haddocks from README (#10).
+
+  * Minor code clean-ups (#7, favonia).
+
+  * Add hsyaml >= 0.2 constraint (#6).
+
+
 ## 0.8.2
 
   * Add filters: first, rest, last, allbutlast.

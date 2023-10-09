@@ -2,7 +2,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -10,8 +9,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 
 {- |
    Module      : Text.DocTemplates.Internal
@@ -44,6 +41,7 @@ import Data.YAML (ToYAML(..), FromYAML(..), Node(..), Scalar(..))
 import Control.Monad.Identity
 import qualified Control.Monad.State.Strict as S
 import Data.Char (chr, ord)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text.Read as T
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -55,7 +53,6 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Data.Text (Text)
 import qualified Data.Map as M
-import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
 import Data.Scientific (floatingOrInteger)
 import Data.List (intersperse)
@@ -131,7 +128,7 @@ instance Monoid Variable where
   mappend = (<>)
 
 type TemplateTarget a =
-  (Monoid a, IsString a, HasChars a, ToText a, FromText a)
+  (HasChars a, ToText a, FromText a)
 
 -- | A 'Context' defines values for template's variables.
 newtype Context a = Context { unContext :: M.Map Text (Val a) }
@@ -143,6 +140,7 @@ data Val a =
     SimpleVal  (Doc a)
   | ListVal    [Val a]
   | MapVal     (Context a)
+  | BoolVal    Bool
   | NullVal
   deriving (Show, Traversable, Foldable, Functor, Data, Typeable)
 
@@ -166,29 +164,23 @@ instance TemplateTarget a => ToContext a a where
   toVal     = SimpleVal . DL.literal
 
 instance ToContext a a => ToContext a (Doc a) where
-  toVal    = SimpleVal
-
--- This is needed because otherwise the compiler tries to
--- match on ToContext a [b], with a = b = Char, even though
--- we don't have ToContext Char Char.  I don't understand why.
-instance {-# OVERLAPS #-} ToContext String String where
-  toVal    = SimpleVal . DL.literal
-
-instance {-# OVERLAPS #-} ToContext String (Doc String) where
-  toVal    = SimpleVal
+  toVal     = SimpleVal
 
 instance ToContext a b => ToContext a [b] where
   toVal     = ListVal . map toVal
+
+instance {-# OVERLAPPING #-} TemplateTarget [a] => ToContext [a] [a] where
+  toVal    = SimpleVal . DL.literal
 
 instance ToContext a b => ToContext a (M.Map Text b) where
   toVal     = MapVal . toContext
   toContext = Context . M.map toVal
 
 instance TemplateTarget a => ToContext a Bool where
-  toVal True  = SimpleVal "true"
-  toVal False = NullVal
+  toVal True  = BoolVal True
+  toVal False = BoolVal False
 
-instance (IsString a, TemplateTarget a) => ToContext a Value where
+instance TemplateTarget a => ToContext a Value where
   toContext x = case fromJSON x of
                   Success y -> y
                   Error _   -> mempty
@@ -214,10 +206,7 @@ instance TemplateTarget a => FromContext a a where
   fromVal (SimpleVal x) = Just (DL.render Nothing x)
   fromVal _             = Nothing
 
--- This is needed because otherwise the compiler tries to
--- match on FromContext a [b], with a = b = Char, even though
--- we don't have FromContext Char Char.  I don't understand why.
-instance {-# OVERLAPS #-} FromContext String String where
+instance {-# OVERLAPPING #-} TemplateTarget [a] => FromContext [a] [a] where
   fromVal (SimpleVal x) = Just (DL.render Nothing x)
   fromVal _             = Nothing
 
@@ -225,7 +214,7 @@ instance FromContext a b => FromContext a [b] where
   fromVal (ListVal  xs) = mapM fromVal xs
   fromVal x             = sequence [fromVal x]
 
-instance (IsString a, TemplateTarget a) => FromJSON (Val a) where
+instance TemplateTarget a => FromJSON (Val a) where
   parseJSON v =
     case v of
       Array vec   -> ListVal <$> mapM parseJSON (V.toList vec)
@@ -234,12 +223,11 @@ instance (IsString a, TemplateTarget a) => FromJSON (Val a) where
                               case floatingOrInteger n of
                                   Left (r :: Double)   -> show r
                                   Right (i :: Integer) -> show i
-      Bool True   -> return $ SimpleVal "true"
-      Object o    -> MapVal . Context . M.fromList . H.toList <$>
-                       mapM parseJSON o
+      Bool b      -> return $ BoolVal b
+      Object _    -> MapVal . Context <$> parseJSON v
       _           -> return NullVal
 
-instance (IsString a, TemplateTarget a) => FromJSON (Context a) where
+instance TemplateTarget a => FromJSON (Context a) where
   parseJSON v = do
     val <- parseJSON v
     case val of
@@ -258,10 +246,10 @@ instance TemplateTarget a => FromYAML (Val a) where
       Scalar _ (SStr t) -> return $ SimpleVal $ fromString . fromText $ t
       Scalar _ (SFloat n) -> return $ SimpleVal $ fromString . show $ n
       Scalar _ (SInt n) -> return $ SimpleVal $ fromString . show $ n
-      Scalar _ (SBool True) -> return $ SimpleVal "true"
+      Scalar _ (SBool b) -> return $ BoolVal b
       _           -> return NullVal
 
-instance (IsString a, TemplateTarget a) => FromYAML (Context a) where
+instance TemplateTarget a => FromYAML (Context a) where
   parseYAML v = do
     val <- parseYAML v
     case val of
@@ -276,6 +264,7 @@ instance TemplateTarget a => ToJSON (Val a) where
   toJSON (MapVal m) = toJSON m
   toJSON (ListVal xs) = toJSON xs
   toJSON (SimpleVal d) = toJSON $ toText $ DL.render Nothing d
+  toJSON (BoolVal b) = toJSON b
 
 instance TemplateTarget a => ToYAML (Context a) where
   toYAML (Context m) = toYAML m
@@ -285,6 +274,7 @@ instance TemplateTarget a => ToYAML (Val a) where
   toYAML (MapVal m) = toYAML m
   toYAML (ListVal xs) = toYAML xs
   toYAML (SimpleVal d) = toYAML $ toText $ DL.render Nothing d
+  toYAML (BoolVal b) = toYAML b
 
 mapDoc :: TemplateTarget a => (Doc a -> Doc a) -> Val a -> Val a
 mapDoc f val =
@@ -292,6 +282,7 @@ mapDoc f val =
     SimpleVal d        -> SimpleVal (f d)
     MapVal (Context m) -> MapVal (Context $ M.map (mapDoc f) m)
     ListVal xs         -> ListVal $ map (mapDoc f) xs
+    BoolVal b          -> BoolVal b
     NullVal            -> NullVal
 
 mapText :: TemplateTarget a => (Text -> Text) -> Val a -> Val a
@@ -305,6 +296,7 @@ applyPipe ToLength val = SimpleVal $ fromString . show $ len
            SimpleVal d        -> T.length . toText $ DL.render Nothing d
            MapVal (Context m) -> M.size m
            ListVal xs         -> length xs
+           BoolVal _          -> 0
            NullVal            -> 0
 applyPipe ToUppercase val = mapText T.toUpper val
 applyPipe ToLowercase val = mapText T.toLower val
@@ -349,7 +341,7 @@ applyPipe ToAlpha val = mapText toAlpha val
 applyPipe ToRoman val = mapText toRoman' val
   where toRoman' t =
          case T.decimal t of
-           Right (y,"") -> maybe t id (toRoman y)
+           Right (y,"") -> fromMaybe t (toRoman y)
            _            -> t
 applyPipe NoWrap val = mapDoc DL.nowrap val
 applyPipe (Block align n border) val =
@@ -402,18 +394,34 @@ multiLookup (t:vs) (MapVal (Context o)) =
     Just v' -> multiLookup vs v'
 multiLookup _ _ = NullVal
 
-resolveVariable :: TemplateTarget a => Variable -> Context a -> [Doc a]
+-- The Bool indicates whether it's a true or false value.
+data Resolved a = Resolved Bool [Doc a]
+   deriving (Show, Read, Data, Typeable, Generic, Eq, Ord,
+             Foldable, Traversable, Functor)
+
+instance Semigroup (Resolved a) where
+  Resolved b1 x1 <> Resolved b2 x2 = Resolved (b1 || b2) (x1 <> x2)
+
+instance Monoid (Resolved a) where
+  mappend = (<>)
+  mempty = Resolved False []
+
+resolveVariable :: TemplateTarget a
+                => Variable -> Context a -> Resolved a
 resolveVariable v ctx = resolveVariable' v (MapVal ctx)
 
-resolveVariable' :: TemplateTarget a => Variable -> Val a -> [Doc a]
+resolveVariable' :: TemplateTarget a
+                 => Variable -> Val a -> Resolved a
 resolveVariable' v val =
   case applyPipes (varPipes v) $ multiLookup (varParts v) val of
-    ListVal xs    -> concatMap (resolveVariable' mempty) xs
+    ListVal xs    -> mconcat $ map (resolveVariable' mempty) xs
     SimpleVal d
-      | DL.isEmpty d -> []
-      | otherwise    -> [removeFinalNl d]
-    MapVal _      -> ["true"]
-    NullVal       -> []
+      | DL.isEmpty d -> Resolved False []
+      | otherwise    -> Resolved True [removeFinalNl d]
+    MapVal _      -> Resolved True ["true"]
+    BoolVal True  -> Resolved True ["true"]
+    BoolVal False -> Resolved False ["false"]
+    NullVal       -> Resolved False []
 
 removeFinalNl :: Doc a -> Doc a
 removeFinalNl DL.NewLine        = mempty
@@ -424,14 +432,23 @@ removeFinalNl x                 = x
 withVariable :: (Monad m, TemplateTarget a)
              => Variable -> Context a -> (Context a -> m (Doc a))
              -> m [Doc a]
-withVariable  v ctx f =
-  case applyPipes (varPipes v) $ multiLookup (varParts v) (MapVal ctx) of
+withVariable var ctx f =
+  case applyPipes (varPipes var) $ multiLookup (varParts var) (MapVal ctx) of
     NullVal     -> return mempty
-    ListVal xs  -> mapM (\iterval -> f $
-                    Context $ M.insert "it" iterval $ unContext ctx) xs
-    MapVal ctx' -> (:[]) <$> f
-                    (Context $ M.insert "it" (MapVal ctx') $ unContext ctx)
-    val' -> (:[]) <$> f (Context $ M.insert "it" val' $ unContext ctx)
+    ListVal xs  -> mapM (\iterval -> f $ setVarVal iterval) xs
+    MapVal ctx' -> (:[]) <$> f (setVarVal (MapVal ctx'))
+    val' -> (:[]) <$> f (setVarVal val')
+ where
+  setVarVal x =
+    addToContext var x $ Context $ M.insert "it" x $ unContext ctx
+  addToContext (Variable [] _) _ (Context ctx') = Context ctx'
+  addToContext (Variable (v:vs) fs) x (Context ctx') =
+    Context $ M.adjust
+              (\z -> case z of
+                       _ | null vs -> x
+                       MapVal m    ->
+                         MapVal $ addToContext (Variable vs fs) x m
+                       _ -> z) v ctx'
 
 type RenderState = S.State Int
 
@@ -448,13 +465,14 @@ updateColumn x = do
 
 renderTemp :: forall a . TemplateTarget a
            => Template a -> Context a -> RenderState (Doc a)
-renderTemp (Literal t) _ = updateColumn $ t
-renderTemp (Interpolate v) ctx = updateColumn $ mconcat $ resolveVariable v ctx
+renderTemp (Literal t) _ = updateColumn t
+renderTemp (Interpolate v) ctx =
+  case resolveVariable v ctx of
+    Resolved _ xs -> updateColumn (mconcat xs)
 renderTemp (Conditional v ift elset) ctx =
-  let res = resolveVariable v ctx
-   in case res of
-        [] -> renderTemp elset ctx
-        _  -> renderTemp ift ctx
+  case resolveVariable v ctx of
+    Resolved False _ -> renderTemp elset ctx
+    Resolved True _  -> renderTemp ift ctx
 renderTemp (Iterate v t sep) ctx = do
   xs <- withVariable v ctx (renderTemp t)
   sep' <- renderTemp sep ctx

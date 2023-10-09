@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
 {- |
    Module      : Text.DocTemplates.Parser
    Copyright   : Copyright (C) 2009-2019 John MacFarlane
@@ -24,7 +23,6 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
-import Data.List (isPrefixOf)
 import System.FilePath
 import Text.DocTemplates.Internal
 import qualified Text.DocLayout as DL
@@ -140,10 +138,9 @@ pEscape = Literal "$" <$ P.try (P.string "$$" <* backupSourcePos 1)
 
 pDirective :: (TemplateTarget a, TemplateMonad m)
            => Parser m (Template a)
-pDirective = do
-  res <- pConditional <|> pForLoop <|> pReflowToggle <|> pNested <|>
-         pInterpolate <|> pBarePartial
-  return res
+pDirective =
+  pConditional <|> pForLoop <|> pReflowToggle <|> pNested <|>
+  pInterpolate <|> pBarePartial
 
 pEnclosed :: Monad m => Parser m a -> Parser m a
 pEnclosed parser = P.try $ do
@@ -227,7 +224,7 @@ pNested = do
           return (y <> z)
   let contents = x <> mconcat xs
   P.updateState $ \st -> st{ nestedCol = oldNested }
-  return $ Nested $ contents
+  return $ Nested contents
 
 pForLoop :: (TemplateTarget a, TemplateMonad m) => Parser m (Template a)
 pForLoop = do
@@ -235,31 +232,14 @@ pForLoop = do
   -- if newline after the "for", then a newline after "endfor" will be swallowed
   pInside $ do
     multiline <- P.option False $ skipEndline >> return True
-    contents <- changeToIt v <$> pTemplate
+    contents <- pTemplate
     sep <- P.option mempty $
              do pEnclosed (P.string "sep")
                 when multiline $ P.option () skipEndline
-                changeToIt v <$> pTemplate
+                pTemplate
     pEnclosed (P.string "endfor")
     when multiline $ P.option () skipEndline
     return $ Iterate v contents sep
-
-changeToIt :: (Semigroup a) => Variable -> Template a -> Template a
-changeToIt v = go
- where
-  go (Interpolate w) = Interpolate (reletter v w)
-  go (Conditional w t1 t2) = Conditional (reletter v w)
-        (changeToIt v t1) (changeToIt v t2)
-  go (Iterate w t1 t2) = Iterate (reletter v w)
-        (changeToIt v t1) (changeToIt v t2)
-  go (Concat t1 t2) = changeToIt v t1 <> changeToIt v t2
-  go (Partial fs t) = Partial fs t  -- don't reletter inside partial
-  go (Nested t) = Nested (go t)
-  go x = x
-  reletter (Variable vs _fs) (Variable ws gs) =
-    if vs `isPrefixOf` ws
-       then Variable ("it" : drop (length vs) ws) gs
-       else Variable ws gs
 
 pInterpolate :: (TemplateTarget a, TemplateMonad m)
              => Parser m (Template a)
