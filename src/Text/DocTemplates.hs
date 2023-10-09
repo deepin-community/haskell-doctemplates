@@ -14,9 +14,9 @@ serve as the context, or a @Context@ value can be constructed manually.
 
 Control structures are provided to test whether a variable has a
 non-blank value and to iterate over the items of a list. Partials—that
-is, subtemplates defined in different files—are supported. Filters can
-be used to transform the values of variables or partials. The provided
-filters make it possible to do list enumeration and tabular layout in
+is, subtemplates defined in different files—are supported. Pipes can be
+used to transform the values of variables or partials. The provided
+pipes make it possible to do list enumeration and tabular layout in
 templates.
 
 Templates are rendered to a doclayout @Doc@ (which is polymorphic in the
@@ -104,6 +104,8 @@ value of the @salary@ field of the object that is the value of the
     verbatim. (Note that no escaping is done; the assumption is that the
     calling program will escape the strings appropriately for the output
     format.)
+-   If the value of the variable is a boolean value, it will be rendered
+    as @true@ if true, or as empty if false.
 -   If the value is a list, the values will be concatenated.
 -   If the value is a map, the string @true@ will be rendered.
 -   Every other value will be rendered as the empty string.
@@ -113,17 +115,21 @@ conversions are done:
 
 -   If the value is a number, it will be rendered as an integer if
     possible, otherwise as a floating-point number.
--   If the value is a JSON boolean, it will be rendered as @true@ if
-    true, and as the empty string if false.
 
 == Conditionals
 
 A conditional begins with @if(variable)@ (enclosed in matched
 delimiters) and ends with @endif@ (enclosed in matched delimiters). It
 may optionally contain an @else@ (enclosed in matched delimiters). The
-@if@ section is used if @variable@ has a non-empty value, otherwise the
-@else@ section is used (if present). (Note that even the string @false@
-counts as a true value.) Examples:
+@if@ section is used if @variable@ has a true value, otherwise the
+@else@ section is used (if present). The following values count as true:
+
+-   any map
+-   any array containing at least one true value
+-   any nonempty string (even @false@)
+-   boolean True
+
+Examples:
 
 > $if(foo)$bar$endif$
 >
@@ -309,11 +315,11 @@ keyword (ended with another @~@).
 
 The @~@ keyword has no effect when rendering to @Text@ or @String@.
 
-== Filters
+== Pipes
 
-A filter transforms the value of a variable or partial. Filters are
+A pipe transforms the value of a variable or partial. Pipes are
 specified using a slash (@\/@) between the variable name (or partial)
-and the filter name. Example:
+and the pipe name. Example:
 
 > $for(name)$
 > $name/uppercase$
@@ -325,13 +331,13 @@ and the filter name. Example:
 >
 > $employee:name()/uppercase$
 
-Filters may be chained:
+Pipes may be chained:
 
 > $for(employees/pairs)$
 > $it.key/alpha/uppercase$. $it.name$
 > $endfor$
 
-Some filters take parameters:
+Some pipes take parameters:
 
 > |----------------------|------------|
 > $for(employee)$
@@ -339,11 +345,23 @@ Some filters take parameters:
 > $endfor$
 > |----------------------|------------|
 
-Currently the following filters are predefined:
+Currently the following pipes are predefined:
 
 -   @pairs@: Converts a map or array to an array of maps, each with
     @key@ and @value@ fields. If the original value was an array, the
     @key@ will be the array index, starting with 1.
+
+-   @first@: Returns the first value of an array, if applied to a
+    non-empty array; otherwise returns the original value.
+
+-   @last@: Returns the last value of an array, if applied to a
+    non-empty array; otherwise returns the original value.
+
+-   @rest@: Returns all but the first value of an array, if applied to a
+    non-empty array; otherwise returns the original value.
+
+-   @allbutlast@: Returns all but the last value of an array, if applied
+    to a non-empty array; otherwise returns the original value.
 
 -   @uppercase@: Converts text to uppercase.
 

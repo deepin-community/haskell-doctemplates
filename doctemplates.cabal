@@ -1,5 +1,5 @@
 name:                doctemplates
-version:             0.8.2
+version:             0.10.0.1
 synopsis:            Pandoc-style document templates
 description:         This is the text templating system used by pandoc.
                      It supports variable interpolation, iteration,
@@ -32,7 +32,7 @@ library
                        safe,
                        text-conversions,
                        aeson,
-                       HsYAML,
+                       HsYAML >= 0.2 && < 0.3,
                        text,
                        doclayout >= 0.3 && < 0.4,
                        containers,
@@ -40,7 +40,6 @@ library
                        filepath,
                        parsec,
                        mtl,
-                       unordered-containers,
                        scientific
   if !impl(ghc >= 8.0)
     build-depends:     semigroups == 0.18.*
